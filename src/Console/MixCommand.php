@@ -28,7 +28,7 @@ class MixCommand extends Command
 
         $files    = new Filesystem;
         $cocktail = new Cocktail($files);
-        
+
         $cocktail->mix();
     }
 }
