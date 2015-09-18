@@ -2,6 +2,8 @@
 
 namespace Ree\Cocktail;
 
+use Symfony\Component\Finder\Finder;
+use Symfony\Component\Finder\SplFileInfo;
 use Ree\Cocktail\Cocktail;
 
 /**
@@ -32,26 +34,90 @@ class Container
      */
     protected $destDir;
 
+    function __construct($sourceDir, $destDir)
+    {
+        $this->sourceDir = $sourceDir;
+        $this->destDir   = $destDir;
+    }
+
+    function getSourceDir()
+    {
+        return $this->sourceDir;
+    }
+
+    function getDestDir()
+    {
+        return $this->destDir;
+    }
+
     /**
      * Compile files
      */
     public function compile(Cocktail $cocktail)
     {
+        $cocktail->enteringContainer($this);
+
         $files = $this->prepareFileList($cocktail);
-        foreach ($files as $file => $output) {
-            $ext = $this->getExt($file);
-            $cocktail->output($ext, $file);
-            $cocktail->getMixer($ext)->compile($file, $output);
+        foreach ($files as $file) {
+            $ext      = $this->getExt($file);
+            $filename = $this->getBaseName($file, $ext);
+            $path     = $this->getPath($file);
+
+            $source     = $this->getSource($file);
+            $detination = $this->getDesitnation($cocktail, $filename, $cocktail->getDestExt($ext), $path);
+
+            $cocktail->compilingAsset($filename, $ext, $source, $path);
+            $cocktail->getMixer($ext)->compile($source, $detination);
+            $cocktail->compiledAsset($filename, $ext, $source, $path);
         }
+
+        $cocktail->leftContainer($this);
     }
 
     protected function prepareFileList(Cocktail $cocktail)
     {
-        
+        $sourceDir = $cocktail->getDir() . "/" . $this->sourceDir;
+
+        $finder = Finder::create()->files()->in($sourceDir)->filter(function(SplFileInfo $file) {
+
+            $filename = $file->getFilename();
+
+            return $filename[0] != '_';
+        });
+
+        $files = iterator_to_array($finder, false);
+
+        return $files;
     }
 
-    protected function getExt($file)
+    protected function getExt(SplFileInfo $file)
     {
-        
+        return $file->getExtension();
+    }
+
+    protected function getBaseName(SplFileInfo $file, $ext)
+    {
+        return $file->getBasename(".{$ext}");
+    }
+
+    protected function getPath(SplFileInfo $file)
+    {
+        return $file->getRelativePath();
+    }
+
+    protected function getSource(SplFileInfo $file)
+    {
+        return $file->getRealPath();
+    }
+
+    protected function getDesitnation(Cocktail $cocktail, $filename, $ext, $path)
+    {
+        $dirPath = $cocktail->getDir() . "/" . $this->destDir . "/" . $path;
+
+        if (!$cocktail->getFiles()->isDirectory($dirPath)) {
+            $cocktail->getFiles()->makeDirectory($dirPath, 0755, true);
+        }
+
+        return $dirPath . "/{$filename}.{$ext}";
     }
 }
