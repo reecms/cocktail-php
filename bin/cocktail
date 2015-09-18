@@ -1,0 +1,9 @@
+<?php
+$autoload = dirname(dirname(__FILE__)) . '/vendor/autoload.php';
+require_once $autoload;
+
+use Ree\Cocktail\Console\Application;
+use Ree\Cocktail\Cocktail;
+
+$application = new Application(Cocktail::APP_NAME, Cocktail::APP_VERSION);
+$application->run();
