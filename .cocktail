@@ -1,0 +1,7 @@
+<?php
+return [
+    [
+        'source' => 'resources/assets',
+        'build'  => 'public/assets',
+    ]
+];

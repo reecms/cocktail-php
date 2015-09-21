@@ -1,11 +1,8 @@
 <?php
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 
 namespace Ree\Cocktail\Contracts;
+
+use Illuminate\Filesystem\Filesystem;
 
 /**
  *
@@ -13,5 +10,12 @@ namespace Ree\Cocktail\Contracts;
  */
 interface Mixer
 {
-    public function compile($source, $dest);
+
+    public function getOutputExtension();
+
+    public function setProductionMode($isProduction);
+    
+    public function setImportPaths(array $paths);
+
+    public function compile(Filesystem $files, $source, $dest);
 }

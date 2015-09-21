@@ -3,14 +3,15 @@
 namespace Ree\Cocktail;
 
 use ReflectionClass;
+use Symfony\Component\Finder\Finder;
+use Symfony\Component\Finder\SplFileInfo;
 use Illuminate\Filesystem\Filesystem;
 use Ree\Cocktail\Contracts\Mixer;
-use Ree\Cocktail\Container;
-use Ree\Cocktail\Recipe;
+use Ree\Cocktail\Contracts\Recipe;
 use Ree\Cocktail\Mixers\CoffeeMixer;
-use Ree\Cocktail\Mixers\JsMixer;
 use Ree\Cocktail\Mixers\LessMixer;
 use Ree\Cocktail\Mixers\SassMixer;
+use Ree\Cocktail\Mixers\GeneralMixer;
 
 /**
  * Description of Cocktail
@@ -22,6 +23,7 @@ class Cocktail
 
     const APP_NAME    = 'Cocktail assets mixer for PHP';
     const APP_VERSION = '0.1.0';
+    const FILE_NAME   = '.cocktail';
 
     /**
      * List of all containers;
@@ -52,30 +54,54 @@ class Cocktail
     protected $dir;
 
     /**
+     * Whether to run in production mode
+     *
+     * @var type 
+     */
+    protected $productionMode = false;
+
+    /**
      * Registered callbacks
      *
      * @var type 
      */
     protected $callbacks = [];
+    
+    /**
+     *
+     * @var Mixer
+     */
+    protected $defaultMixer;
 
-    public function __construct(Filesystem $files, $dir)
+    public function __construct(Filesystem $files, $dir, $isProduction)
     {
-        $this->files = $files;
-        $this->dir   = $dir;
+        $this->files          = $files;
+        $this->dir            = $dir;
+        $this->productionMode = $isProduction;
 
         $this->registerBuiltInMixers();
-
-        $this->getContainers();
     }
 
-    public function mix()
+    public function mix(Recipe $recipe)
     {
-        foreach ($this->cups as $cup) {
-            $cup->compile($this);
+        $this->callCallback('recipe.before', [$recipe]);
+
+        $files = $this->prepareFileList($recipe->getSourceDir());
+        foreach ($files as $file) {
+            /* @var $file SplFileInfo */
+            $ext   = $file->getExtension();
+            $mixer = $this->getMixer($ext);
+            $dest  = $this->getBuildPath($recipe->getBuildDir(), $mixer, $file);
+
+            $this->callCallback('file.before', [$recipe, $mixer, $file]);
+            $mixer->compile($this->files, $file->getRealPath(), $dest);
         }
+
+        $this->callCallback('recipe.after', [$recipe]);
     }
 
     /**
+     * Register a mixer for an extension
      * 
      * @param string $extension
      * @param string $class
@@ -83,55 +109,32 @@ class Cocktail
      * @return \Ree\Cocktail\Cocktail
      * @throws \InvalidArgumentException
      */
-    public function registerMixer($extension, $class, $destExt)
+    public function registerMixer($extension, $class)
     {
         $refClass = new ReflectionClass($class);
         if (!$refClass->implementsInterface(Mixer::class)) {
             throw new \InvalidArgumentException("The {$class} does not implement our mixer contract.");
         }
-        $this->mixers[$extension] = [
-            'mixer' => new $class(),
-            'ext'   => $destExt
-        ];
+
+        $mixer                    = new $class();
+        $mixer->setProductionMode($this->productionMode);
+        $this->mixers[$extension] = $mixer;
+
         return $this;
     }
 
     /**
+     * Get the mixer for the extension
      * 
      * @param string $ext
      * @return Mixer
-     * @throws \InvalidArgumentException
      */
     public function getMixer($ext)
     {
         if (!isset($this->mixers[$ext])) {
-            throw new \InvalidArgumentException("No mixer was registered for the extension [.{$ext}].");
+            return $this->getDefaultMixer();
         }
-        return $this->mixers[$ext]['mixer'];
-    }
-
-    /**
-     * 
-     * @param string $ext
-     * @return Mixer
-     * @throws \InvalidArgumentException
-     */
-    public function getDestExt($ext)
-    {
-        if (!isset($this->mixers[$ext])) {
-            throw new \InvalidArgumentException("No mixer was registered for the extension [.{$ext}].");
-        }
-        return $this->mixers[$ext]['ext'];
-    }
-
-    /**
-     * Get all containers;
-     * 
-     * @return Container[];
-     */
-    public function getCups()
-    {
-        return $this->cups;
+        return $this->mixers[$ext];
     }
 
     /**
@@ -154,137 +157,72 @@ class Cocktail
         return $this->dir;
     }
 
-    /**
-     * Run before entering a container
-     * 
-     * @param type $callback
-     */
-    public function beforeContainer($callback)
+    public function getBuildPath($buildDir, Mixer $mixer, SplFileInfo $file)
     {
-        if (!isset($this->callbacks['container.entering'])) {
-            $this->callbacks['container.entering'] = [];
+        $ext = $mixer->getOutputExtension();
+        if (!$ext) {
+            $ext = $file->getExtension();
         }
-        $this->callbacks['container.entering'][] = $callback;
+
+        $path = $file->getRelativePath();
+
+        $filename = $file->getBasename("." . $file->getExtension());
+
+        $build = $buildDir . "/" . $path;
+        if (!$this->files->exists($build)) {
+            $this->files->makeDirectory($build, 0755, true);
+        }
+
+        return "{$build}/{$filename}.{$ext}";
     }
 
-    /**
-     * Run after leaving a container
-     * 
-     * @param type $callback
-     */
-    public function afterContainer($callback)
+    public function addCallback($name, $closure)
     {
-        if (!isset($this->callbacks['container.left'])) {
-            $this->callbacks['container.left'] = [];
+        if (!isset($this->callbacks[$name])) {
+            $this->callbacks[$name] = [];
         }
-        $this->callbacks['container.lelf'][] = $callback;
+        $this->callbacks[$name][] = $closure;
     }
 
-    /**
-     * Run before compiling an assets
-     * 
-     * @param type $callback
-     */
-    public function beforeAsset($callback)
+    protected function callCallback($name, $args)
     {
-        if (!isset($this->callbacks['asset.compiling'])) {
-            $this->callbacks['asset.compiling'] = [];
-        }
-        $this->callbacks['asset.compiling'][] = $callback;
-    }
-
-    /**
-     * Run after compiling an assets
-     * 
-     * @param type $callback
-     */
-    public function afterAsset($callback)
-    {
-        if (!isset($this->callbacks['asset.compiled'])) {
-            $this->callbacks['asset.compiled'] = [];
-        }
-        $this->callbacks['asset.compiled'][] = $callback;
-    }
-
-    /**
-     * Run before entering a container
-     * 
-     * @param Container $container
-     */
-    public function enteringContainer(Container $container)
-    {
-        if (!isset($this->callbacks['container.entering'])) {
+        if (!isset($this->callbacks[$name])) {
             return;
         }
-        foreach ($this->callbacks['container.entering'] as $callback) {
-            call_user_func($callback, $container);
-        }
-    }
-
-    /**
-     * Run after leaving a container
-     * 
-     * @param Container $container
-     */
-    public function leftContainer(Container $container)
-    {
-        if (!isset($this->callbacks['container.left'])) {
-            return;
-        }
-        foreach ($this->callbacks['container.lelf'] as $callback) {
-            call_user_func($callback, $container);
-        }
-    }
-
-    /**
-     * Run before compiling an assets
-     * 
-     * @param string $name
-     * @param string $ext
-     * @param string $source
-     * @param string $path
-     */
-    public function compilingAsset($name, $ext, $source, $path)
-    {
-        if (!isset($this->callbacks['asset.compiling'])) {
-            return;
-        }
-        foreach ($this->callbacks['asset.compiling'] as $callback) {
-            call_user_func($callback, $name, $ext, $source, $path);
-        }
-    }
-
-    /**
-     * Run after compiling an assets
-     * 
-     * @param string $name
-     * @param string $ext
-     * @param string $source
-     * @param string $path
-     * @param string $error
-     */
-    public function compiledAsset($name, $ext, $source, $path, $error = false)
-    {
-        if (!isset($this->callbacks['asset.compiled'])) {
-            return;
-        }
-        foreach ($this->callbacks['asset.compiled'] as $callback) {
-            call_user_func($callback, $name, $ext, $source, $path, $error);
+        foreach ($this->callbacks[$name] as $callback) {
+            call_user_func_array($callback, $args);
         }
     }
 
     protected function registerBuiltInMixers()
     {
-        $this->registerMixer('scss', SassMixer::class, 'css');
-        $this->registerMixer('less', LessMixer::class, 'css');
-        $this->registerMixer('coffee', CoffeeMixer::class, 'js');
-        $this->registerMixer('js', JsMixer::class, 'js');
+        $this->registerMixer('scss', SassMixer::class);
+        $this->registerMixer('less', LessMixer::class);
+//        $this->registerMixer('coffee', CoffeeMixer::class);
     }
 
-    protected function getContainers()
+    protected function getDefaultMixer()
     {
-        $recipe = new Recipe($this->files);
+        if (!$this->defaultMixer) {
+            $this->defaultMixer = new GeneralMixer();
+        }
 
-        $this->cups = $recipe->read();
+        return $this->defaultMixer;
+    }
+
+    protected function prepareFileList($sourceDir)
+    {
+        $sourceDir = $this->dir . "/" . $sourceDir;
+
+        $finder = Finder::create()->files()->in($sourceDir)->filter(function(SplFileInfo $file) {
+
+            $filename = $file->getFilename();
+
+            return $filename[0] != '_';
+        });
+
+        $files = iterator_to_array($finder, false);
+
+        return $files;
     }
 }

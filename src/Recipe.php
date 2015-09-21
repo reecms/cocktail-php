@@ -2,53 +2,45 @@
 
 namespace Ree\Cocktail;
 
-use Illuminate\Filesystem\Filesystem;
-use Ree\Cocktail\Container;
+use Illuminate\Support\Arr;
+use Ree\Cocktail\Contracts\Recipe as RecipeContract;
 
 /**
  * Description of Recipe
  *
  * @author Hieu Le <hieu@codeforcevina.com>
  */
-class Recipe
+class Recipe implements RecipeContract
 {
 
-    const FILE_NAME = '.cocktail';
+    protected $sourceDir;
+    protected $buildDir;
+    protected $importPaths;
 
-    /**
-     * File system instance
-     *
-     * @var Filesystem
-     */
-    protected $files;
-    
-    function __construct(Filesystem $files)
+    public function __construct(array $config)
     {
-        $this->files = $files;
+        $this->sourceDir   = Arr::get($config, 'source', 'source');
+        $this->buildDir    = Arr::get($config, 'build', 'build');
+        $this->importPaths = Arr::get($config, 'imports', []);
     }
 
-        /**
-     * Create containers from the recipe file
-     * 
-     * @return Container[]
-     */
-    public function read()
+    public function addImportPaths($paths)
     {
-        $recipeFile = static::FILE_NAME;
-        
-        if (!$this->files->exists($recipeFile)) {
-            return [];
-        }
+        $this->importPaths = array_merge($this->importPaths, $paths);
+    }
 
-        $recipes = $this->files->getRequire($recipeFile);
+    public function getBuildDir()
+    {
+        return $this->buildDir;
+    }
 
-        $containers = [];
+    public function getImportPaths()
+    {
+        return $this->importPaths;
+    }
 
-        foreach ($recipes as $source => $dest) {
-            $container    = new Container($source, $dest);
-            $containers[] = $container;
-        }
-
-        return $containers;
+    public function getSourceDir()
+    {
+        return $this->sourceDir;
     }
 }
