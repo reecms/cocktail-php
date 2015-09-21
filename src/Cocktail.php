@@ -66,7 +66,7 @@ class Cocktail
      * @var type 
      */
     protected $callbacks = [];
-    
+
     /**
      *
      * @var Mixer
@@ -91,6 +91,7 @@ class Cocktail
             /* @var $file SplFileInfo */
             $ext   = $file->getExtension();
             $mixer = $this->getMixer($ext);
+            $mixer->setImportPaths($recipe->getImportPaths());
             $dest  = $this->getBuildPath($recipe->getBuildDir(), $mixer, $file);
 
             $this->callCallback('file.before', [$recipe, $mixer, $file]);
@@ -198,7 +199,6 @@ class Cocktail
     {
         $this->registerMixer('scss', SassMixer::class);
         $this->registerMixer('less', LessMixer::class);
-//        $this->registerMixer('coffee', CoffeeMixer::class);
     }
 
     protected function getDefaultMixer()

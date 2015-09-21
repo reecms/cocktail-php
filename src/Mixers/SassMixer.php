@@ -2,9 +2,9 @@
 
 namespace Ree\Cocktail\Mixers;
 
-use SplFileInfo;
 use Leafo\ScssPhp\Compiler;
 use Leafo\ScssPhp\Formatter\Compressed as CompressedOutput;
+use Leafo\ScssPhp\Formatter\Expanded as ExpandedOutput;
 use Illuminate\Filesystem\Filesystem;
 
 /**
@@ -25,6 +25,7 @@ class SassMixer extends AbstractScriptMixer
     {
         $this->compiler = new Compiler();
         $this->compiler->setLineNumberStyle(Compiler::LINE_COMMENTS);
+        $this->compiler->setFormatter(ExpandedOutput::class);
     }
 
     public function compile(Filesystem $files, $source, $dest)

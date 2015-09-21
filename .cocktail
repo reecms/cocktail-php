@@ -1,7 +1,10 @@
 <?php
 return [
     [
-        'source' => 'resources/assets',
-        'build'  => 'public/assets',
+        'source'  => 'resources/assets',
+        'build'   => 'public/assets',
+        'imports' => [
+            __DIR__ . '/resources/vendors/',
+        ],
     ]
 ];

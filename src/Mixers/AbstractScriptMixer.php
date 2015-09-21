@@ -2,6 +2,7 @@
 
 namespace Ree\Cocktail\Mixers;
 
+use SplFileInfo;
 use Ree\Cocktail\Contracts\Mixer;
 
 /**
