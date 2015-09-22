@@ -8,10 +8,9 @@ use Symfony\Component\Finder\SplFileInfo;
 use Illuminate\Filesystem\Filesystem;
 use Ree\Cocktail\Contracts\Mixer;
 use Ree\Cocktail\Contracts\Recipe;
-use Ree\Cocktail\Mixers\CoffeeMixer;
-use Ree\Cocktail\Mixers\LessMixer;
 use Ree\Cocktail\Mixers\SassMixer;
 use Ree\Cocktail\Mixers\GeneralMixer;
+use Ree\Cocktail\Mixers\SprocketMixer;
 
 /**
  * Description of Cocktail
@@ -198,7 +197,8 @@ class Cocktail
     protected function registerBuiltInMixers()
     {
         $this->registerMixer('scss', SassMixer::class);
-        $this->registerMixer('less', LessMixer::class);
+        $this->registerMixer('css', SprocketMixer::class);
+        $this->registerMixer('js', SprocketMixer::class);
     }
 
     protected function getDefaultMixer()
