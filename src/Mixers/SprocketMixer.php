@@ -16,15 +16,19 @@ class SprocketMixer extends AbstractScriptMixer
 {
 
     protected $isProduction;
-    protected $paths = [];
+    protected $paths      = [];
+    protected $cssImports = [];
+    protected $isCss      = false;
 
     public function compile(Filesystem $files, $source, $dest)
     {
         $file = new SplFileInfo($source);
 
-        $this->resetPaths();
+        $this->reset();
 
-        $content = $this->parse($files, $file);
+        $this->isCss = $file->getExtension() == 'css';
+
+        $content = $this->parse($files, $file, true);
 
         $files->put($dest, $content);
     }
@@ -39,12 +43,14 @@ class SprocketMixer extends AbstractScriptMixer
         $this->isProduction = $isProduction;
     }
 
-    protected function resetPaths()
+    protected function reset()
     {
-        $this->paths = [];
+        $this->paths      = [];
+        $this->isCss      = false;
+        $this->cssImports = [];
     }
 
-    protected function parse(Filesystem $files, SplFileInfo $file)
+    protected function parse(Filesystem $files, SplFileInfo $file, $writeImports = false)
     {
         $path = $file->getPathname();
         if (in_array($path, $this->paths)) {
@@ -94,10 +100,20 @@ class SprocketMixer extends AbstractScriptMixer
             if (trim($l)) {
                 $firstCommentEnd = true;
             }
+
+            if ($this->isCssImport($l)) {
+                $this->cssImports[] = $l;
+                continue;
+            }
+
             $newLines[] = $l;
         }
 
-        return implode("\n", array_merge($requiredContents, $newLines));
+        if ($writeImports) {
+            return implode("\n", array_merge($this->cssImports, $requiredContents, $newLines));
+        } else {
+            return implode("\n", array_merge($requiredContents, $newLines));
+        }
     }
 
     protected function isCommentStart($l)
@@ -122,6 +138,17 @@ class SprocketMixer extends AbstractScriptMixer
     {
         $line = trim($l);
         return substr($line, 0, 2) == '*=';
+    }
+
+    protected function isCssImport($l)
+    {
+        if (!$this->isCss) {
+            return false;
+        }
+
+        $line = trim($l);
+
+        return substr($line, 0, 8) == '@import ';
     }
 
     protected function extractRequires($l)
@@ -153,6 +180,6 @@ class SprocketMixer extends AbstractScriptMixer
         }
 
 
-        throw new RuntimeException("Cannot require the file [{$thatFile}] from [{$path}/{$filename}.{$ext}]");
+        throw new RuntimeException("Cannot require the file [{$thatFile}.{$ext}] from [{$path}/{$filename}.{$ext}]");
     }
 }
